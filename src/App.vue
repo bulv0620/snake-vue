@@ -2,20 +2,16 @@
   <div class="container">
     <div class="stage">
       <div class="row" v-for="(col, y) in stage" :key="y">
-        <div
-          class="col"
-          :class="{
-            wall: item.type === 'wall',
-            snake: item.type === 'snake',
-            food: item.type === 'food',
-          }"
-          v-for="(item, x) in col"
-          :key="x"
-        ></div>
+        <div class="col" :class="{
+          wall: item.type === 'wall',
+          snake: item.type === 'snake',
+          food: item.type === 'food',
+        }" v-for="(item, x) in col" :key="x"></div>
       </div>
     </div>
-    <p class="status" v-if="gameOver">游戏结束，得分{{score}}，刷新页面重来。</p>
-    <p class="status" v-else>键盘↑↓←→控制</p>
+    <p class="status" @click="init" v-if="gameOver">游戏结束，得分{{ score }}，点击这里重来。</p>
+    <p class="status" @click="startGame" v-else-if="pause">游戏已暂停，点击这里继续</p>
+    <p class="status" @click="pauseGame" v-else>键盘↑↓←→控制，Z加速，X减速，当前速度{{ speed }}，点击这里暂停</p>
   </div>
 </template>
 
@@ -26,14 +22,18 @@ import { ref, computed, onBeforeMount, onMounted } from "vue";
 let moveInterval = null;
 // 移动方向
 let direction = "left";
+// 步控器
+let step = [];
 // 速度
-const speed = 120;
+let speed = ref(120);
 // 行数 y
 const row = 40;
 // 列数 x
 const col = 80;
 // 游戏结束
 const gameOver = ref(false);
+// 游戏暂停状态
+const pause = ref(false);
 // 分数
 const score = ref(0);
 // 地图
@@ -56,20 +56,54 @@ const stage = computed(() => {
 
 onBeforeMount(init);
 onMounted(() => {
+  window.onblur = (e) => {
+    pauseGame()
+  }
   window.document.onkeydown = (e) => {
     const keyNum = window.event ? e.keyCode : e.which;
+    // console.log(keyNum);
     switch (keyNum) {
       case 37:
-        direction = "left";
+      case 65:
+        if (!['left', 'right'].includes(direction)) {
+          direction = 'left'
+          step.push('left')
+        }
         break;
       case 38:
-        direction = "top";
+      case 87:
+        if (!['top', 'bottom'].includes(direction)) {
+          direction = 'top'
+          step.push('top')
+        }
         break;
       case 39:
-        direction = "right";
+      case 68:
+        if (!['left', 'right'].includes(direction)) {
+          direction = 'right'
+          step.push('right')
+        }
         break;
       case 40:
-        direction = "bottom";
+      case 83:
+        if (!['top', 'bottom'].includes(direction)) {
+          direction = 'bottom'
+          step.push('bottom')
+        }
+        break;
+      case 90:
+        // 加速
+        if (speed.value > 40) {
+          speed.value -= 20
+          startGame()
+        }
+        break;
+      case 88:
+        // 减速
+        if (speed.value < 220) {
+          speed.value += 20
+          startGame()
+        }
         break;
       default:
         break;
@@ -86,14 +120,29 @@ function init() {
     }))
   );
 
-  snake.value = initSnake(row, col);
+  direction = 'left'
+  step = []
+  gameOver.value = false
+  score.value = 0
+  snake.value = initSnake();
+  food.value = []
+  food.value.push(createFood(snake.value));
 
-  food.value.push(createFood(row, col, snake.value));
-
-  moveInterval = setInterval(moveAction, speed);
+  startGame()
 }
 
-function initSnake(row, col) {
+function startGame() {
+  pause.value = false
+  clearInterval(moveInterval)
+  moveInterval = setInterval(moveAction, speed.value);
+}
+
+function pauseGame() {
+  pause.value = true
+  clearInterval(moveInterval)
+}
+
+function initSnake() {
   const snakeDefaultValue = [
     {
       x: parseInt(col / 2) + 1,
@@ -111,13 +160,11 @@ function initSnake(row, col) {
   return snakeDefaultValue;
 }
 
-function createFood(row, col, snake) {
+function createFood(snake) {
   let randonX = Math.floor(Math.random() * (col - 2)) + 1;
   let randonY = Math.floor(Math.random() * (row - 2)) + 1;
 
   while (snake.find((el) => el.x === randonX && el.y === randonY)) {
-    console.log(randonX, randonY);
-
     randonX = Math.floor(Math.random() * (col - 2)) + 1;
     randonY = Math.floor(Math.random() * (row - 2)) + 1;
   }
@@ -134,7 +181,8 @@ function moveAction() {
     x: currentHead.x,
     y: currentHead.y,
   };
-  switch (direction) {
+  const d = step.length === 0 ? direction : step.shift()
+  switch (d) {
     case "left":
       newHead.x = newHead.x - 1;
       break;
@@ -160,7 +208,7 @@ function moveAction() {
   } else {
     // 食物被吃
     food.value.splice(foodIndex, 1);
-    food.value.push(createFood(row, col, snake.value));
+    food.value.push(createFood(snake.value));
     score.value++;
   }
 
@@ -214,6 +262,7 @@ function moveAction() {
   .status {
     color: white;
     text-align: center;
+    cursor: pointer;
   }
 }
 </style>
